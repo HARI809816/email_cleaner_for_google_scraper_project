@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import os
 import uuid
+import tempfile
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,8 +16,8 @@ load_dotenv()
 
 app = FastAPI()
 
-UPLOAD_DIR = "temp"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = tempfile.gettempdir()
+# os.makedirs(UPLOAD_DIR, exist_ok=True) # System temp dir always exists
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
