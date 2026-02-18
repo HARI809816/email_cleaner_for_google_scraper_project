@@ -5,3 +5,5 @@ openpyxl
 python-dotenv
 google-generativeai
 python-multipart
+numpy
+requests

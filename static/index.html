@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email Cleaner & Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Email Cleaner</h1>
+            <p class="subtitle">Intelligent filtering, country detection, and name extraction.</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div id="uploadSection" class="upload-area">
+            <input type="file" id="fileInput" accept=".xlsx, .xls">
+            <span class="icon-upload">📁</span>
+            <p class="upload-text">Drag & Drop your Excel file here</p>
+            <p class="upload-hint">or click to browse</p>
+        </div>
+
+        <!-- Processing State -->
+        <div id="processingSection" class="processing-state">
+            <div class="spinner"></div>
+            <h3>Processing your data...</h3>
+            <p class="subtitle">Cleaning emails, detecting countries, and calculating stats.</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="results-section">
+            <div id="statsContainer" class="stats-grid">
+                <!-- Stats will be injected here via JS -->
+            </div>
+            
+            <div class="actions">
+                <a id="downloadBtn" href="#" class="btn-download">Download Result</a>
+            </div>
+            
+            <div style="margin-top: 2rem; text-align: center;">
+                <a href="#" onclick="location.reload()" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">Process another file</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

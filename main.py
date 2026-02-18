@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import re
 import os
@@ -16,6 +17,12 @@ app = FastAPI()
 
 UPLOAD_DIR = "temp"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+async def read_root():
+    return FileResponse("static/index.html")
 
 EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
 
@@ -34,24 +41,98 @@ def is_missing_name(name):
     name = " ".join(name.split()).strip().lower()
     return name in ["", "nan", "none", "null", "unknown", "-", "na", "n/a", "not available"]
 
+def is_junk_email(email):
+    """
+    Filters out garbage emails containing sentences, placeholders, or instruction text.
+    Returns True if email is considered junk.
+    """
+    if not email:
+        return True
+        
+    local_part = email.split("@")[0].lower()
+    
+    # 1. Block Words (Instructions / Sentences / Common Placeholders)
+    block_words = [
+        "correspondence", "pleasesend", "workconducted", "workdone", 
+        "writtenwhile", "interning", "currentaddress", "author", 
+        "reprint", "address", "published", "submitted", "preprint",
+        "firstname", "lastname", "surname", "secondname", 
+        "yourname", "username", "user.name", "example", 
+        "email", "contact", "domain", "here"
+    ]
+    
+    if any(word in local_part for word in block_words):
+        return True
+
+    # 2. Specific Starts/Ends checks for "name"
+    if local_part.startswith("name.") or local_part.endswith(".name") or ".name." in local_part:
+        return True
+
+    # 3. Starting with domain patterns (common scraping error)
+    if local_part.startswith("gmail.com") or local_part.startswith("yahoo.com") or local_part.startswith("hotmail.com"):
+        return True
+
+    # 4. Length Heuristic (Sentences often > 50 chars)
+    if len(local_part) > 50:
+        return True
+        
+    return False
+
 def get_country(domain):
     domain = domain.lower()
+    # Ordered by length to match specific subdomains first (e.g. .co.uk before .uk)
     tld_map = {
-        ".ac.uk": "United Kingdom",
-        ".uk":    "United Kingdom",
-        ".edu.au":"Australia",
-        ".au":    "Australia",
-        ".cn":    "China",
-        ".hk":    "Hong Kong",
-        ".tw":    "Taiwan",
-        ".de":    "Germany",
-        ".fr":    "France",
-        ".edu":   "USA (Academic)",
-        ".jp":    "Japan",
-        ".kr":    "South Korea",
-        ".ca":    "Canada",
-        ".in":    "India",
-        ".sg":    "Singapore",
+        ".ac.uk": "United Kingdom", ".co.uk": "United Kingdom", ".uk": "United Kingdom",
+        ".edu.au": "Australia", ".com.au": "Australia", ".net.au": "Australia", ".au": "Australia",
+        ".edu.cn": "China", ".com.cn": "China", ".cn": "China",
+        ".edu.hk": "Hong Kong", ".hk": "Hong Kong",
+        ".edu.tw": "Taiwan", ".tw": "Taiwan",
+        ".de": "Germany",
+        ".fr": "France",
+        ".edu": "USA (Academic)",
+        ".jp": "Japan", ".ac.jp": "Japan",
+        ".kr": "South Korea", ".ac.kr": "South Korea",
+        ".ca": "Canada",
+        ".in": "India", ".ac.in": "India", ".co.in": "India",
+        ".sg": "Singapore", ".com.sg": "Singapore",
+        ".it": "Italy",
+        ".es": "Spain",
+        ".nl": "Netherlands",
+        ".ru": "Russia",
+        ".br": "Brazil",
+        ".pk": "Pakistan",
+        ".se": "Sweden",
+        ".no": "Norway",
+        ".dk": "Denmark",
+        ".fi": "Finland",
+        ".pl": "Poland",
+        ".ch": "Switzerland",
+        ".at": "Austria",
+        ".be": "Belgium",
+        ".cz": "Czech Republic",
+        ".tr": "Turkey",
+        ".gr": "Greece",
+        ".il": "Israel", ".ac.il": "Israel",
+        ".za": "South Africa", ".ac.za": "South Africa",
+        ".mx": "Mexico",
+        ".ar": "Argentina",
+        ".cl": "Chile",
+        ".co": "Colombia",
+        ".my": "Malaysia",
+        ".id": "Indonesia",
+        ".th": "Thailand",
+        ".vn": "Vietnam",
+        ".ph": "Philippines",
+        ".nz": "New Zealand",
+        ".ie": "Ireland",
+        ".pt": "Portugal",
+        ".hu": "Hungary",
+        ".ro": "Romania",
+        ".ua": "Ukraine",
+        ".ir": "Iran",
+        ".eg": "Egypt",
+        ".sa": "Saudi Arabia",
+        ".ae": "UAE",
     }
     for tld in sorted(tld_map, key=len, reverse=True):
         if domain.endswith(tld):
@@ -162,7 +243,7 @@ async def process_excel(file: UploadFile = File(...)):
             similar_emails = {e.strip() for e in str(row["Similar Emails"]).split(",")}
 
         # Only valid emails
-        valid_emails = [e for e in all_emails if e and EMAIL_REGEX.match(e)]
+        valid_emails = [e for e in all_emails if e and EMAIL_REGEX.match(e) and not is_junk_email(e)]
 
         # First email keeps the real name; extra emails get "None" in Sheet 1
         first_email = valid_emails[0] if valid_emails else None
@@ -196,7 +277,7 @@ async def process_excel(file: UploadFile = File(...)):
                 })
 
             # -------- Sheet 3 (Python extraction when name missing or extra email) --------
-            if name_missing or is_extra:
+            if (name_missing or is_extra) and not is_similar:
                 extracted_name = extract_name_from_email(email)  # "" if not found
 
                 extracted_rows.append({
@@ -218,14 +299,41 @@ async def process_excel(file: UploadFile = File(...)):
     similar_df   = similar_df.sort_values("Citations", ascending=False)
     extracted_df = extracted_df.sort_values("Citations", ascending=False)
 
+    # Calculate Summary Statistics
+    s1_count = len(all_df)
+    s2_count = len(similar_df)
+    s3_named_count = len(extracted_df[extracted_df['Name'] != ""])
+    s3_blank_count = len(extracted_df[extracted_df['Name'] == ""])
+    total_contacts = s2_count + s3_named_count
+
+    summary_data = [
+        {"Metric": "Sheet 1 Total (All Clean)", "Count": s1_count},
+        {"Metric": "Sheet 2 Total (Similar Name)", "Count": s2_count},
+        {"Metric": "Sheet 3 (Name Found)", "Count": s3_named_count},
+        {"Metric": "Sheet 3 (Name Blank)", "Count": s3_blank_count},
+        {"Metric": "Total Potential Contacts (Sheet 2 + Sheet 3 Named)", "Count": total_contacts}
+    ]
+    summary_df = pd.DataFrame(summary_data)
+
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        summary_df.to_excel(writer,   sheet_name="Summary",              index=False)
         all_df.to_excel(writer,       sheet_name="All_Clean_Emails",     index=False)
         similar_df.to_excel(writer,   sheet_name="Similar_Name_Emails",  index=False)
-        extracted_df.to_excel(writer, sheet_name="AI_Processed_Emails",  index=False)
+        extracted_df.to_excel(writer, sheet_name="Name_Processed_Emails",  index=False)
 
-    return FileResponse(
-        output_path,
-        filename="cleaned_emails.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    return JSONResponse({
+        "uid": uid,
+        "stats": summary_data
+    })
+
+@app.get("/download/{uid}")
+async def download_file(uid: str):
+    file_path = f"{UPLOAD_DIR}/{uid}_output.xlsx"
+    if os.path.exists(file_path):
+        return FileResponse(
+            file_path,
+            filename="cleaned_emails.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    return JSONResponse({"error": "File not found"}, status_code=404)
     
