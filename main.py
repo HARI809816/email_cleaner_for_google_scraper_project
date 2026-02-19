@@ -54,29 +54,42 @@ def is_junk_email(email):
     
     # 1. Block Words (Instructions / Sentences / Common Placeholders)
     block_words = [
-        "correspondence", "pleasesend", "workconducted", "workdone", 
-        "writtenwhile", "interning", "currentaddress", "author", 
+        "correspondence", "pleasesend", "workconducted", "workdone",
+        "writtenwhile", "interning", "currentaddress", "author",
         "reprint", "address", "published", "submitted", "preprint",
-        "firstname", "lastname", "surname", "secondname", 
-        "yourname", "username", "user.name", "example", 
-        "email", "contact", "domain", "here"
+        "firstname", "lastname", "surname", "secondname",
+        "yourname", "username", "user.name", "example",
+        "email", "contact", "domain", "here",
+        # Hyphenated/dot-separated placeholder patterns
+        "first-name", "last-name", "first.last", "first.name", "last.name",
+        # Generic role/action words that appear as usernames
+        "working", "postdoc", "professor", "researcher",
     ]
-    
+
     if any(word in local_part for word in block_words):
         return True
 
-    # 2. Specific Starts/Ends checks for "name"
+    # 2. Token-level placeholder check: split on separators and look for
+    #    both 'first' and 'last' tokens (e.g. first.last@, first-last@)
+    tokens = re.split(r'[.\-_+]', local_part)
+    if "first" in tokens and "last" in tokens:
+        return True
+    # Single-token generic words used as name placeholders
+    if tokens == ["working"] or tokens == ["name"] or tokens == ["user"]:
+        return True
+
+    # 3. Specific Starts/Ends checks for "name"
     if local_part.startswith("name.") or local_part.endswith(".name") or ".name." in local_part:
         return True
 
-    # 3. Starting with domain patterns (common scraping error)
+    # 4. Starting with domain patterns (common scraping error)
     if local_part.startswith("gmail.com") or local_part.startswith("yahoo.com") or local_part.startswith("hotmail.com"):
         return True
 
-    # 4. Length Heuristic (Sentences often > 50 chars)
+    # 5. Length Heuristic (Sentences often > 50 chars)
     if len(local_part) > 50:
         return True
-        
+
     return False
 
 def get_country(domain):
@@ -142,71 +155,81 @@ def get_country(domain):
 
 def extract_name_from_email(email):
     """
-    Pure Python name extraction from email username.
-
-    Logic:
-    1. Take the username part (before @)
-    2. Split on common separators: . _ - +
-    3. Filter out parts that are:
-       - Purely numeric (student IDs like 21831010)
-       - Too short (single char like initials only)
-       - Contain digits (e.g. cchen151, zxiong002)
-       - Look like department/role codes (admin, info, support, etc.)
-    4. Capitalize each remaining part
-    5. If fewer than 2 valid parts → return empty (not confident enough)
-
-    Examples:
-      mohammad.ghadri@x.com  -> Mohammad Ghadri
-      binyuan.hby@x.com      -> Binyuan  (hby is initials, filtered)
-      lu.qin@x.com           -> Lu Qin
-      cchen151@x.com         -> (empty, has digits)
-      21831010@x.com         -> (empty, all digits)
-      jcb@x.com              -> (empty, too short / all initials)
-      sana.syed@x.com        -> Sana Syed
-      guohao@x.com           -> (empty, single token — not confident)
-      errolf@x.com           -> (empty, single token)
+    Strict name extraction — requires at least 2 valid word parts.
+    e.g. john.smith@x.com → John Smith
+         guohao@x.com     → (empty, single token)
     """
-
     STOPWORDS = {
         "admin", "info", "support", "contact", "mail", "email",
         "noreply", "no-reply", "help", "team", "office", "phd",
         "lab", "dept", "university", "research", "group", "center",
         "cs", "eng", "sci", "edu", "web", "service", "services",
+        # Placeholder / generic words
+        "first", "last", "name", "working", "user", "postdoc",
     }
-
     try:
         username = email.split("@")[0].lower()
-
-        # Split on separators
         parts = re.split(r'[.\-_+]', username)
-
         valid_parts = []
         for part in parts:
-            # Skip empty
             if not part:
                 continue
-            # Skip purely numeric (student IDs)
             if part.isdigit():
                 continue
-            # Skip parts containing any digit (e.g. cchen151, ys5hd)
             if any(c.isdigit() for c in part):
                 continue
-            # Skip very short parts that look like initials (1-2 chars)
             if len(part) <= 2:
                 continue
-            # Skip known stopwords / role words
             if part in STOPWORDS:
                 continue
             valid_parts.append(part.capitalize())
-
-        # Need at least 2 valid parts to be confident it's a real name
         if len(valid_parts) < 2:
             return ""
-
         return " ".join(valid_parts)
-
     except Exception:
         return ""
+
+
+def extract_name_from_email_relaxed(email):
+    """
+    Relaxed name extraction — accepts a single valid word as a name.
+    Used for Sheet 4 on emails that already failed the strict check.
+    e.g. guohao@x.com  → Guohao
+         errolf@x.com  → Errolf
+         cchen151@x.com → (empty, contains digits)
+         admin@x.com   → (empty, stopword)
+    """
+    STOPWORDS = {
+        "admin", "info", "support", "contact", "mail", "email",
+        "noreply", "no-reply", "help", "team", "office", "phd",
+        "lab", "dept", "university", "research", "group", "center",
+        "cs", "eng", "sci", "edu", "web", "service", "services",
+        # Placeholder / generic words
+        "first", "last", "name", "working", "user", "postdoc",
+    }
+    try:
+        username = email.split("@")[0].lower()
+        parts = re.split(r'[.\-_+]', username)
+        valid_parts = []
+        for part in parts:
+            if not part:
+                continue
+            if part.isdigit():
+                continue
+            if any(c.isdigit() for c in part):
+                continue
+            if len(part) <= 2:
+                continue
+            if part in STOPWORDS:
+                continue
+            valid_parts.append(part.capitalize())
+        # Relaxed: accept even a single valid word
+        if len(valid_parts) < 1:
+            return ""
+        return " ".join(valid_parts)
+    except Exception:
+        return ""
+
 
 # ======================
 # API ENDPOINT
@@ -290,7 +313,6 @@ async def process_excel(file: UploadFile = File(...)):
                 })
 
     columns = ["Name", "Email", "Domain", "Country", "Citations"]
-    extracted_columns = columns
 
     all_df       = pd.DataFrame(all_rows,       columns=columns).drop_duplicates("Email")
     similar_df   = pd.DataFrame(similar_rows,   columns=columns).drop_duplicates("Email")
@@ -300,27 +322,63 @@ async def process_excel(file: UploadFile = File(...)):
     similar_df   = similar_df.sort_values("Citations", ascending=False)
     extracted_df = extracted_df.sort_values("Citations", ascending=False)
 
-    # Calculate Summary Statistics
-    s1_count = len(all_df)
-    s2_count = len(similar_df)
-    s3_named_count = len(extracted_df[extracted_df['Name'] != ""])
-    s3_blank_count = len(extracted_df[extracted_df['Name'] == ""])
-    total_contacts = s2_count + s3_named_count
+    # -------- Sheet 4: Email_Name_Extracted --------
+    # Take blank-name rows from Name_Processed_Emails and try to infer a name from the email address.
+    # Only keep rows where extraction succeeds (non-empty result).
+    email_name_rows = []
+    blank_name_mask = extracted_df["Name"] == ""
+    for _, row in extracted_df[blank_name_mask].iterrows():
+        # Use the relaxed extractor — the strict one already returned "" for these emails
+        inferred = extract_name_from_email_relaxed(row["Email"])
+        if inferred:
+            r = row.to_dict()
+            r["Name"] = inferred
+            email_name_rows.append(r)
+
+    email_name_df = (
+        pd.DataFrame(email_name_rows, columns=columns)
+        .drop_duplicates("Email")
+        .sort_values("Citations", ascending=False)
+        if email_name_rows
+        else pd.DataFrame(columns=columns)
+    )
+
+    # -------- Sheet 5: Final_Combined --------
+    # Merge: Similar_Name_Emails + named rows from Name_Processed_Emails + Email_Name_Extracted
+    named_extracted_df = extracted_df[extracted_df["Name"] != ""].copy()
+
+    final_combined_df = (
+        pd.concat([similar_df, named_extracted_df, email_name_df], ignore_index=True)
+        .drop_duplicates("Email")
+        .sort_values("Citations", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    # -------- Summary Statistics --------
+    s1_count       = len(all_df)
+    s2_count       = len(similar_df)
+    s3_named_count = len(extracted_df[extracted_df["Name"] != ""])
+    s3_blank_count = len(extracted_df[extracted_df["Name"] == ""])
+    s4_count       = len(email_name_df)
+    s5_count       = len(final_combined_df)
 
     summary_data = [
-        {"Metric": "Sheet 1 Total (All Clean)", "Count": s1_count},
-        {"Metric": "Sheet 2 Total (Similar Name)", "Count": s2_count},
-        {"Metric": "Sheet 3 (Name Found)", "Count": s3_named_count},
-        {"Metric": "Sheet 3 (Name Blank)", "Count": s3_blank_count},
-        {"Metric": "Total Potential Contacts (Sheet 2 + Sheet 3 Named)", "Count": total_contacts}
+        {"Metric": "Sheet 2 Total (All Clean)",        "Count": s1_count},
+        {"Metric": "Sheet 3 (Similar Name Emails)",    "Count": s2_count},
+        {"Metric": "Sheet 4 (Name Found)",             "Count": s3_named_count},
+        {"Metric": "Sheet 4 (Name Blank)",             "Count": s3_blank_count},
+        {"Metric": "Sheet 5 (Email Name Extracted)",   "Count": s4_count},
+        {"Metric": "Sheet 6 Final Combined",           "Count": s5_count},
     ]
     summary_df = pd.DataFrame(summary_data)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        summary_df.to_excel(writer,   sheet_name="Summary",              index=False)
-        all_df.to_excel(writer,       sheet_name="All_Clean_Emails",     index=False)
-        similar_df.to_excel(writer,   sheet_name="Similar_Name_Emails",  index=False)
-        extracted_df.to_excel(writer, sheet_name="Name_Processed_Emails",  index=False)
+        summary_df.to_excel(writer,        sheet_name="Summary",               index=False)
+        all_df.to_excel(writer,            sheet_name="All_Clean_Emails",      index=False)
+        similar_df.to_excel(writer,        sheet_name="Similar_Name_Emails",   index=False)
+        extracted_df.to_excel(writer,      sheet_name="Name_Processed_Emails", index=False)
+        email_name_df.to_excel(writer,     sheet_name="Email_Name_Extracted",  index=False)
+        final_combined_df.to_excel(writer, sheet_name="Final_Combined",        index=False)
 
     return JSONResponse({
         "uid": uid,

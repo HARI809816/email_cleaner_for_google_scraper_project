@@ -1,50 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Email Cleaner & Analyzer</title>
+    <meta name="description"
+        content="AI-powered email cleaner with intelligent filtering, country detection, and name extraction.">
+    <title>AI Email Cleaner &amp; Analyzer</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
+
 <body>
+
+    <!-- Animated background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
     <div class="container">
         <header>
+            <div class="logo-icon">✉️</div>
             <h1>AI Email Cleaner</h1>
-            <p class="subtitle">Intelligent filtering, country detection, and name extraction.</p>
+            <p class="subtitle">Intelligent filtering · Country detection · Name extraction</p>
         </header>
+
+        <div class="divider"></div>
 
         <!-- Upload Section -->
         <div id="uploadSection" class="upload-area">
             <input type="file" id="fileInput" accept=".xlsx, .xls">
-            <span class="icon-upload">📁</span>
-            <p class="upload-text">Drag & Drop your Excel file here</p>
+            <span class="icon-upload">📂</span>
+            <p class="upload-text">Drag &amp; Drop your Excel file here</p>
             <p class="upload-hint">or click to browse</p>
+            <span class="upload-badge">📊 .xlsx / .xls supported</span>
         </div>
 
         <!-- Processing State -->
         <div id="processingSection" class="processing-state">
-            <div class="spinner"></div>
-            <h3>Processing your data...</h3>
-            <p class="subtitle">Cleaning emails, detecting countries, and calculating stats.</p>
+            <div class="spinner-wrap">
+                <div class="ring ring-1"></div>
+                <div class="ring ring-2"></div>
+                <div class="ring ring-3"></div>
+            </div>
+            <h3>Processing your data<span class="processing-dots"><span>.</span><span>.</span><span>.</span></span></h3>
+            <p class="subtitle">Cleaning emails, detecting countries &amp; extracting names</p>
         </div>
 
         <!-- Results Section -->
         <div id="resultsSection" class="results-section">
+            <div class="results-header">
+                <h2>✅ Analysis Complete</h2>
+                <p class="subtitle">Here's a breakdown of your processed data</p>
+            </div>
+
             <div id="statsContainer" class="stats-grid">
-                <!-- Stats will be injected here via JS -->
+                <!-- Stat cards injected by JS -->
             </div>
-            
+
             <div class="actions">
-                <a id="downloadBtn" href="#" class="btn-download">Download Result</a>
+                <a id="downloadBtn" href="#" class="btn-download">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Processed File
+                </a>
             </div>
-            
-            <div style="margin-top: 2rem; text-align: center;">
-                <a href="#" onclick="location.reload()" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">Process another file</a>
-            </div>
+
+            <a href="#" class="reset-link" onclick="location.reload()">↩ Process another file</a>
         </div>
     </div>
 
     <script src="/static/script.js"></script>
 </body>
+
 </html>

@@ -5,53 +5,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsSection = document.getElementById('resultsSection');
     const uploadSection = document.getElementById('uploadSection');
 
+    // ──────────────────────────────────────────
     // Drag & Drop Handlers
+    // ──────────────────────────────────────────
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
     });
 
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
+    ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.add('dragover'), false));
+    ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('dragover'), false));
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, highlight, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, unhighlight, false);
-    });
-
-    function highlight(e) {
-        dropZone.classList.add('dragover');
-    }
-
-    function unhighlight(e) {
-        dropZone.classList.remove('dragover');
-    }
-
-    dropZone.addEventListener('drop', handleDrop, false);
+    dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files), false);
     dropZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-    function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
-    }
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
     function handleFiles(files) {
-        if (files.length > 0) {
-            uploadFile(files[0]);
-        }
+        if (files.length > 0) uploadFile(files[0]);
     }
 
+    // ──────────────────────────────────────────
+    // Upload & Process
+    // ──────────────────────────────────────────
     async function uploadFile(file) {
-        // UI Transition: Show Processing
-        uploadSection.style.display = 'none';
-        processingSection.style.display = 'block';
-        resultsSection.style.display = 'none';
+        // Animate out upload, show processing
+        uploadSection.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => {
+            uploadSection.style.display = 'none';
+            processingSection.style.display = 'block';
+            resultsSection.style.display = 'none';
+        }, 280);
 
         const formData = new FormData();
         formData.append('file', file);
@@ -62,9 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData
             });
 
-            if (!response.ok) {
-                throw new Error('Processing failed');
-            }
+            if (!response.ok) throw new Error('Processing failed');
 
             const data = await response.json();
             displayResults(data);
@@ -72,34 +55,80 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error:', error);
             alert('An error occurred during processing. Please try again.');
-            // Reset UI
             uploadSection.style.display = 'block';
+            uploadSection.style.animation = 'fadeUp 0.4s ease both';
             processingSection.style.display = 'none';
         }
     }
 
+    // ──────────────────────────────────────────
+    // Display Results
+    // ──────────────────────────────────────────
+
+    // Per-metric icon & highlight config
+    const cardConfig = {
+        'Sheet 2 Total (All Clean)': { emoji: '🧹', highlight: false },
+        'Sheet 3 (Similar Name Emails)': { emoji: '👥', highlight: false },
+        'Sheet 4 (Name Found)': { emoji: '✅', highlight: false },
+        'Sheet 4 (Name Blank)': { emoji: '⚠️', highlight: false },
+        'Sheet 5 (Email Name Extracted)': { emoji: '🔍', highlight: false },
+        'Sheet 6 Final Combined': { emoji: '🏆', highlight: true },
+    };
+
     function displayResults(data) {
-        // Hide Processing, Show Results
         processingSection.style.display = 'none';
         resultsSection.style.display = 'block';
+        resultsSection.style.animation = 'fadeIn 0.5s ease both';
 
-        // Populate Stats
         const statsContainer = document.getElementById('statsContainer');
         statsContainer.innerHTML = '';
 
-        data.stats.forEach(stat => {
+        data.stats.forEach((stat, index) => {
+            const cfg = cardConfig[stat.Metric] || { emoji: '', highlight: false };
             const card = document.createElement('div');
-            card.className = 'stat-card';
+            card.className = 'stat-card' + (cfg.highlight ? ' stat-card--highlight' : '');
+
+            // Placeholder while counting animation runs
             card.innerHTML = `
-                <div class="stat-value">${stat.Count}</div>
-                <div class="stat-label">${stat.Metric}</div>
+                <div class="stat-value" data-target="${stat.Count}">0</div>
+                <div class="stat-label">${cfg.emoji ? cfg.emoji + ' ' : ''}${stat.Metric}</div>
             `;
             statsContainer.appendChild(card);
+
+            // Staggered entrance: each card appears 80ms after the previous
+            setTimeout(() => {
+                card.classList.add('visible');
+                // Animate count up after card appears
+                setTimeout(() => animateCount(card.querySelector('.stat-value'), stat.Count), 200);
+            }, index * 80);
         });
 
-        // Setup Download Link
+        // Download button
         const downloadBtn = document.getElementById('downloadBtn');
         downloadBtn.href = `/download/${data.uid}`;
-        downloadBtn.innerHTML = `<span>Download Processed File</span> <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>`;
+    }
+
+    // ──────────────────────────────────────────
+    // Count-Up Animation
+    // ──────────────────────────────────────────
+    function animateCount(el, target) {
+        if (target === 0) return;
+        const duration = 900; // ms
+        const start = performance.now();
+
+        function step(now) {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease-out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            el.textContent = Math.round(eased * target).toLocaleString();
+            if (progress < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
     }
 });
+
+/* Inject fadeOut keyframe dynamically so we can use it inline */
+const style = document.createElement('style');
+style.textContent = `@keyframes fadeOut { to { opacity: 0; transform: translateY(-12px); } }`;
+document.head.appendChild(style);
