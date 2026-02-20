@@ -395,4 +395,3 @@ async def download_file(uid: str):
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     return JSONResponse({"error": "File not found"}, status_code=404)
-    
