@@ -1,0 +1,157 @@
+====================================================
+  EMAIL CLEANER API — VERCEL DEPLOYMENT GUIDE
+====================================================
+
+PREREQUISITES
+--------------
+1. A GitHub account with this repo pushed (already done)
+2. A Vercel account — sign up free at https://vercel.com
+3. Python 3.9+ (only needed for local testing)
+
+
+----------------------------------------------------
+STEP 1 — VERIFY PROJECT FILES
+----------------------------------------------------
+
+Make sure these files exist in the root of your repo:
+
+  main.py          ✔  FastAPI application entry point
+  requirements.txt ✔  Python dependencies
+  vercel.json      ✔  Vercel build + routing config
+
+Your vercel.json should look like this:
+
+  {
+    "builds": [
+      { "src": "main.py", "use": "@vercel/python" }
+    ],
+    "routes": [
+      { "src": "/(.*)", "dest": "main.py" }
+    ]
+  }
+
+
+----------------------------------------------------
+STEP 2 — IMPORT PROJECT TO VERCEL
+----------------------------------------------------
+
+Option A — Via Vercel Dashboard (Recommended for first time):
+
+  1. Go to https://vercel.com/dashboard
+  2. Click "Add New..." → "Project"
+  3. Click "Import Git Repository"
+  4. Select your GitHub repo:
+      example : HARI809816/email_cleaner_for_google_scraper_project
+  5. Leave Framework Preset as "Other"
+  6. Click "Deploy"
+
+Option B — Via Vercel CLI:
+
+  Install the CLI (one time):
+    npm install -g vercel
+
+  Login:
+    vercel login
+
+  Deploy from project folder:
+    cd "d:\new scrap\backup\email_cleaner_api"
+    vercel --prod
+
+
+----------------------------------------------------
+STEP 3 — SET ENVIRONMENT VARIABLES
+----------------------------------------------------
+
+NOTE: The current main.py does NOT use Gemini AI, so
+GEMINI_API_KEY is optional. Skip if not using backup.py.
+
+If you need it:
+  1. Go to Vercel Dashboard → Your Project → Settings
+  2. Click "Environment Variables"
+  3. Add:
+       Name  : GEMINI_API_KEY
+       Value : your-actual-api-key-here
+       Env   : Production, Preview, Development (check all)
+  4. Click "Save"
+  5. Redeploy: Deployments → "..." → Redeploy
+
+
+----------------------------------------------------
+STEP 4 — VERIFY DEPLOYMENT
+----------------------------------------------------
+
+After deploy completes, Vercel gives you a URL like:
+  https://email-cleaner-xxxx.vercel.app
+
+Test the API is live:
+  GET  https://your-project.vercel.app/          → Web UI
+  POST https://your-project.vercel.app/process-excel/  → Upload endpoint
+
+You can test the POST endpoint with curl:
+  curl -X POST https://your-project.vercel.app/process-excel/ \
+       -F "file=@your_file.xlsx"
+
+
+----------------------------------------------------
+STEP 5 — AUTO-DEPLOY ON PUSH (ALREADY ACTIVE)
+----------------------------------------------------
+
+Once the project is imported, Vercel automatically
+redeploys whenever you push to the main branch:
+
+  git add .
+  git commit -m "your changes"
+  git push origin main
+  → Vercel detects push and deploys automatically ✔
+
+
+----------------------------------------------------
+IMPORTANT LIMITATIONS ON VERCEL
+----------------------------------------------------
+
+⚠ File Storage is Temporary
+   Uploaded files are saved to /tmp (system temp dir).
+   Files are NOT persisted between requests.
+   Download the output file immediately after processing.
+
+⚠ Function Timeout
+   Vercel Hobby plan has a 10-second function timeout.
+   Very large Excel files (1000+ rows) may time out.
+   Pro plan allows up to 60 seconds.
+
+⚠ Static Files
+   The /static folder is served correctly because main.py
+   mounts it with StaticFiles. No extra config needed.
+
+
+----------------------------------------------------
+TROUBLESHOOTING
+----------------------------------------------------
+
+Problem : Build fails with "module not found"
+Fix     : Check requirements.txt includes all imports.
+          Run locally: pip install -r requirements.txt
+
+Problem : 500 error on /process-excel/
+Fix     : Check Vercel function logs in Dashboard →
+          Deployments → Functions tab.
+
+Problem : Static files (CSS/JS) not loading
+Fix     : Ensure /static folder is committed to git.
+          Run: git add static/ && git commit -m "add static"
+
+Problem : Download returns 404
+Fix     : This is expected if the function restarted.
+          Upload and download must happen in the same
+          function execution session on Vercel.
+
+Problem : Environment variable not found
+Fix     : Go to Settings → Environment Variables.
+          After adding, you MUST redeploy for it to apply.
+
+
+====================================================
+  LIVE URL AFTER DEPLOYMENT:
+  https://email-cleaner-for-google-scraper-project.vercel.app
+  (or the custom URL Vercel assigns you)
+====================================================
