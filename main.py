@@ -25,7 +25,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def read_root():
     return FileResponse("static/index.html")
 
-EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+# Requires: local part ≥2 chars, domain has at least one dot with a 2–6 letter TLD
+EMAIL_REGEX = re.compile(r"^[\w\.-]{2,}@[\w\.-]+\.[a-zA-Z]{2,6}$")
 
 # ======================
 # HELPERS
@@ -45,12 +46,26 @@ def is_missing_name(name):
 def is_junk_email(email):
     """
     Filters out garbage emails containing sentences, placeholders, or instruction text.
+    Also rejects OCR artifacts where a letter in a word was mistaken for '@'.
     Returns True if email is considered junk.
     """
     if not email:
         return True
-        
-    local_part = email.split("@")[0].lower()
+
+    parts = email.split("@")
+    if len(parts) != 2:
+        return True
+
+    local_part = parts[0].lower()
+    domain_part = parts[1].lower()
+
+    # 0. Reject single-character local parts (e.g. 'n@esintoaunitball' OCR artifacts)
+    if len(local_part) <= 1:
+        return True
+
+    # 0b. Reject domains with no dot — real domains always have a TLD separated by a dot
+    if "." not in domain_part:
+        return True
     
     # 1. Block Words (Instructions / Sentences / Common Placeholders)
     block_words = [
