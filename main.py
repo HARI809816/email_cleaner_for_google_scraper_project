@@ -246,6 +246,31 @@ def extract_name_from_email_relaxed(email):
         return ""
 
 
+def is_name_similar_to_email(name, email):
+    """
+    Checks if the given name is likely associated with the given email.
+    """
+    if is_missing_name(name) or not email:
+        return False
+
+    name = name.lower()
+    # Remove punctuation for matching
+    name_clean = re.sub(r'[^\w\s]', ' ', name)
+    name_parts = [p for p in name_clean.split() if len(p) > 2]
+
+    local_part = email.split("@")[0].lower()
+
+    if not name_parts:
+        return False
+
+    match_count = 0
+    for np in name_parts:
+        if np in local_part:
+            match_count += 1
+            
+    return match_count >= 1
+
+
 # ======================
 # API ENDPOINT
 # ======================
@@ -306,7 +331,7 @@ async def process_excel(file: UploadFile = File(...)):
             })
 
             # -------- Sheet 2 --------
-            if is_similar:
+            if is_similar and is_name_similar_to_email(original_name, email):
                 similar_rows.append({
                     "Name":      original_name,
                     "Email":     email,
@@ -330,7 +355,12 @@ async def process_excel(file: UploadFile = File(...)):
     columns = ["Name", "Email", "Domain", "Country", "Citations"]
 
     all_df       = pd.DataFrame(all_rows,       columns=columns).drop_duplicates("Email")
-    similar_df   = pd.DataFrame(similar_rows,   columns=columns).drop_duplicates("Email")
+    
+    # Sheet 2 Deduplication: One email per unique Name (keeps highest citations due to later sort, but we should sort first or handle manually)
+    similar_df   = pd.DataFrame(similar_rows,   columns=columns)
+    if not similar_df.empty:
+        similar_df = similar_df.sort_values("Citations", ascending=False).drop_duplicates("Name")
+    
     extracted_df = pd.DataFrame(extracted_rows, columns=columns).drop_duplicates("Email")
 
     all_df       = all_df.sort_values("Citations", ascending=False)
