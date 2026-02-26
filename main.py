@@ -74,7 +74,7 @@ def is_junk_email(email):
         "reprint", "address", "published", "submitted", "preprint",
         "firstname", "lastname", "surname", "secondname",
         "yourname", "username", "user.name", "example",
-        "email", "contact", "domain", "here",
+        "email", "contact", "domain", "here", "report",
         # Hyphenated/dot-separated placeholder patterns
         "first-name", "last-name", "first.last", "first.name", "last.name",
         # Generic role/action words that appear as usernames
